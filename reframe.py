@@ -1785,24 +1785,18 @@ def main():
         _notify_systemd_ready(startup_status)
 
     # ═══════════════════════════════════════════════════════════════
-    # HARDWARE: Button — PiSugar 3 via I2C
-    # The PiSugar 3 exposes a button register at I2C address 0x57.
-    # This is a direct hardware read (no PiSugar library needed).
-    # To use a different button/trigger, replace is_power_button_pressed().
-    # Long press (≥2s) is ignored here — PiSugar handles shutdown natively.
-    # See: https://github.com/PiSugar/PiSugar/wiki/PiSugar-3-I2C-Datasheet
+    # HARDWARE: regular push button
+    # long press 2 seconds to shut down
     # ═══════════════════════════════════════════════════════════════
-    I2C_ADDRESS = 0x57
-    BUTTON_REGISTER = 0x02
-    import smbus2
-    bus = smbus2.SMBus(1)
+    from gpiozero import Button
+
+    shutter_button = Button(16, pull_up=True, bounce_time=0.05)
 
     def is_power_button_pressed():
         try:
-            reg_val = bus.read_byte_data(I2C_ADDRESS, BUTTON_REGISTER)
-            return bool(reg_val & 0x01)  # Check the least significant bit
+            return shutter_button.is_pressed
         except Exception as e:
-            logging.error("Failed to read I2C: %s", e)
+            logging.error("Failed to read GPIO: %s", e)
             return False
 
     prev_state = False
@@ -1848,7 +1842,17 @@ def main():
                             else:
                                 logging.error("Capture failed: %s", result.get("message", "unknown error"))
                     else:
-                        logging.info(f"Long press detected ({press_duration:.1f}s) - ignoring for photo capture")
+                        try:
+                            logging.info("Shutting down...")
+                            logging.info("To use the camera again, manually power on the Raspberry Pi")
+                            # Give a moment for logging to flush
+                            time.sleep(2)
+                            # Execute system shutdown command
+                            subprocess.run(["sudo", "shutdown", "-h", "now"], check=True)
+                            return True
+                        except Exception as e:
+                            logging.error(f"Error shutting down system: {e}")
+                            return False
 
                     button_press_start_time = None
 
@@ -1857,7 +1861,6 @@ def main():
     except KeyboardInterrupt:
         logging.info("Program interrupted by user. Exiting...")
     finally:
-        bus.close()
         try:
             # Stop timeout monitor and put display to sleep if initialized inside CameraSystem
             if camera_system:
