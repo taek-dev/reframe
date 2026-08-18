@@ -1750,10 +1750,10 @@ status_led = RGBLED(red=5, green=6, blue=13)  # BCM numbering
 # For common anode instead: RGBLED(red=5, green=6, blue=13, active_high=False)
 
 def led_ready():
-    status_led.color = (1, 1, 1)   # white
+    status_led.color = (0, 1, .2)   # green
 
 def led_processing():
-    status_led.color = (0, 0, 1)   # blue
+    status_led.color = (0, .2, 1)   # blue
 
 def led_shutting_down():
     status_led.color = (1, 0.5, 0)   # orange
@@ -1780,31 +1780,42 @@ def main():
     _enable_camera_hdr()
     camera_system = CameraSystem(eink_display=startup_display)
     logging.info("Camera system initialized")
-    logging.info("Taking startup photo...")
-    startup_status = "Camera initialized; startup capture failed"
 
     try:
-        with _operation_lock:
-            result = camera_system.capture_photo_api(fast_mode=True)
-
-        if result.get("success"):
-            logging.info("Startup photo captured: %s", result.get("photo_id", "unknown"))
-            if camera_system.camera_manager.settings.get("display", {}).get("auto_display", True):
-                logging.info("Startup photo sent to display")
-            logging.info("System ready")
-            startup_status = "Startup photo dispatched"
-
-            # Ensure activity time is updated before starting timeout monitor
-            camera_system.update_activity()
-            camera_system.start_timeout_monitor_deferred()
-        else:
-            logging.warning("Failed to capture startup photo: %s", result.get("message", "unknown error"))
+        _notify_systemd_ready("Camera initialized; startup photo skipped")
     except Exception as e:
-        logging.error("Error taking startup photo: %s", e)
-    finally:
-        # reframe.service is Type=notify. Dashboard startup waits for this, but
-        # does not wait for the e-ink panel's long physical refresh.
-        _notify_systemd_ready(startup_status)
+        logging.error("Failed to notify systemd: %s", e)
+
+    camera_system.update_activity()
+    camera_system.start_timeout_monitor_deferred()
+
+    # logging.info("Taking startup photo...")
+    # startup_status = "Camera initialized; startup capture failed"
+
+    # try:
+    #     with _operation_lock:
+    #         result = camera_system.capture_photo_api(fast_mode=True)
+
+    #     if result.get("success"):
+    #         logging.info("Startup photo captured: %s", result.get("photo_id", "unknown"))
+    #         if camera_system.camera_manager.settings.get("display", {}).get("auto_display", True):
+    #             logging.info("Startup photo sent to display")
+    #         logging.info("System ready")
+    #         startup_status = "Startup photo dispatched"
+
+    #         # Ensure activity time is updated before starting timeout monitor
+    #         camera_system.update_activity()
+    #         camera_system.start_timeout_monitor_deferred()
+    #     else:
+    #         logging.warning("Failed to capture startup photo: %s", result.get("message", "unknown error"))
+    # except Exception as e:
+    #     logging.error("Error taking startup photo: %s", e)
+    # finally:
+    #     # reframe.service is Type=notify. Dashboard startup waits for this, but
+    #     # does not wait for the e-ink panel's long physical refresh.
+    #     _notify_systemd_ready(startup_status)
+
+
 
     # ═══════════════════════════════════════════════════════════════
     # HARDWARE: regular push button
