@@ -1750,7 +1750,7 @@ status_led = RGBLED(red=5, green=6, blue=13)  # BCM numbering
 # For common anode instead: RGBLED(red=5, green=6, blue=13, active_high=False)
 
 def led_ready():
-    status_led.color = (0, 1, .2)   # green
+    status_led.color = (0, 1, .1)   # green
 
 def led_processing():
     status_led.color = (0, .2, 1)   # blue
