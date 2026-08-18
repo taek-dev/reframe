@@ -1744,6 +1744,27 @@ def _start_api_server_in_background(host: str = "127.0.0.1", port: int = 8077):
     thread = threading.Thread(target=_run, daemon=True)
     thread.start()
 
+from gpiozero import RGBLED
+
+status_led = RGBLED(red=5, green=6, blue=13)  # BCM numbering
+# For common anode instead: RGBLED(red=5, green=6, blue=13, active_high=False)
+
+def led_ready():
+    status_led.color = (1, 1, 1)   # white
+
+def led_processing():
+    status_led.color = (0, 0, 1)   # blue
+
+def led_shutting_down():
+    status_led.color = (1, 0.5, 0)   # orange
+
+def led_error():
+    status_led.color = (1, 0, 0)   # red
+
+
+def led_off():
+    status_led.off()
+
 
 def main():
     global camera_system
@@ -1761,28 +1782,31 @@ def main():
     logging.info("Camera system initialized")
     logging.info("Taking startup photo...")
     startup_status = "Camera initialized; startup capture failed"
-    try:
-        with _operation_lock:
-            result = camera_system.capture_photo_api(fast_mode=True)
 
-        if result.get("success"):
-            logging.info("Startup photo captured: %s", result.get("photo_id", "unknown"))
-            if camera_system.camera_manager.settings.get("display", {}).get("auto_display", True):
-                logging.info("Startup photo sent to display")
-            logging.info("System ready")
-            startup_status = "Startup photo dispatched"
+    # i disabled the startup photo and dashboard, takes too long
 
-            # Ensure activity time is updated before starting timeout monitor
-            camera_system.update_activity()
-            camera_system.start_timeout_monitor_deferred()
-        else:
-            logging.warning("Failed to capture startup photo: %s", result.get("message", "unknown error"))
-    except Exception as e:
-        logging.error("Error taking startup photo: %s", e)
-    finally:
-        # reframe.service is Type=notify. Dashboard startup waits for this, but
-        # does not wait for the e-ink panel's long physical refresh.
-        _notify_systemd_ready(startup_status)
+    # try:
+    #     with _operation_lock:
+    #         result = camera_system.capture_photo_api(fast_mode=True)
+
+    #     if result.get("success"):
+    #         logging.info("Startup photo captured: %s", result.get("photo_id", "unknown"))
+    #         if camera_system.camera_manager.settings.get("display", {}).get("auto_display", True):
+    #             logging.info("Startup photo sent to display")
+    #         logging.info("System ready")
+    #         startup_status = "Startup photo dispatched"
+
+    #         # Ensure activity time is updated before starting timeout monitor
+    #         camera_system.update_activity()
+    #         camera_system.start_timeout_monitor_deferred()
+    #     else:
+    #         logging.warning("Failed to capture startup photo: %s", result.get("message", "unknown error"))
+    # except Exception as e:
+    #     logging.error("Error taking startup photo: %s", e)
+    # finally:
+    #     # reframe.service is Type=notify. Dashboard startup waits for this, but
+    #     # does not wait for the e-ink panel's long physical refresh.
+    #     _notify_systemd_ready(startup_status)
 
     # ═══════════════════════════════════════════════════════════════
     # HARDWARE: regular push button
@@ -1818,6 +1842,12 @@ def main():
         while True:
             current_state = is_power_button_pressed()
 
+            # decide LED state
+            if camera_system.eink_display.is_busy():
+                led_processing()
+            else:
+                led_ready()
+
             # Button press started
             if current_state and not prev_state:
                 button_press_start_time = time.monotonic()
@@ -1835,16 +1865,19 @@ def main():
                             logging.info(f"Short press detected ({press_duration:.1f}s) - display busy, ignoring")
                         else:
                             logging.info(f"Short press detected ({press_duration:.1f}s) - capturing photo...")
+                            led_processing()
                             with _operation_lock:
                                 result = camera_system.capture_photo_api()
                             if result.get("success"):
                                 logging.info("Photo captured%s.", " and sent to display" if camera_system.camera_manager.settings.get("display", {}).get("auto_display", True) else "")
                             else:
+                                led_error()
                                 logging.error("Capture failed: %s", result.get("message", "unknown error"))
                     else:
                         try:
                             logging.info("Shutting down...")
                             logging.info("To use the camera again, manually power on the Raspberry Pi")
+                            led_shutting_down()
                             # Give a moment for logging to flush
                             time.sleep(2)
                             # Execute system shutdown command
@@ -1862,6 +1895,7 @@ def main():
         logging.info("Program interrupted by user. Exiting...")
     finally:
         try:
+            led_off()
             # Stop timeout monitor and put display to sleep if initialized inside CameraSystem
             if camera_system:
                 camera_system.stop_timeout_monitor()
