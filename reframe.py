@@ -1783,30 +1783,28 @@ def main():
     logging.info("Taking startup photo...")
     startup_status = "Camera initialized; startup capture failed"
 
-    # i disabled the startup photo and dashboard, takes too long
+    try:
+        with _operation_lock:
+            result = camera_system.capture_photo_api(fast_mode=True)
 
-    # try:
-    #     with _operation_lock:
-    #         result = camera_system.capture_photo_api(fast_mode=True)
+        if result.get("success"):
+            logging.info("Startup photo captured: %s", result.get("photo_id", "unknown"))
+            if camera_system.camera_manager.settings.get("display", {}).get("auto_display", True):
+                logging.info("Startup photo sent to display")
+            logging.info("System ready")
+            startup_status = "Startup photo dispatched"
 
-    #     if result.get("success"):
-    #         logging.info("Startup photo captured: %s", result.get("photo_id", "unknown"))
-    #         if camera_system.camera_manager.settings.get("display", {}).get("auto_display", True):
-    #             logging.info("Startup photo sent to display")
-    #         logging.info("System ready")
-    #         startup_status = "Startup photo dispatched"
-
-    #         # Ensure activity time is updated before starting timeout monitor
-    #         camera_system.update_activity()
-    #         camera_system.start_timeout_monitor_deferred()
-    #     else:
-    #         logging.warning("Failed to capture startup photo: %s", result.get("message", "unknown error"))
-    # except Exception as e:
-    #     logging.error("Error taking startup photo: %s", e)
-    # finally:
-    #     # reframe.service is Type=notify. Dashboard startup waits for this, but
-    #     # does not wait for the e-ink panel's long physical refresh.
-    #     _notify_systemd_ready(startup_status)
+            # Ensure activity time is updated before starting timeout monitor
+            camera_system.update_activity()
+            camera_system.start_timeout_monitor_deferred()
+        else:
+            logging.warning("Failed to capture startup photo: %s", result.get("message", "unknown error"))
+    except Exception as e:
+        logging.error("Error taking startup photo: %s", e)
+    finally:
+        # reframe.service is Type=notify. Dashboard startup waits for this, but
+        # does not wait for the e-ink panel's long physical refresh.
+        _notify_systemd_ready(startup_status)
 
     # ═══════════════════════════════════════════════════════════════
     # HARDWARE: regular push button
