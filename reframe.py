@@ -1893,7 +1893,6 @@ def main():
         logging.info("Program interrupted by user. Exiting...")
     finally:
         try:
-            led_off()
             # Stop timeout monitor and put display to sleep if initialized inside CameraSystem
             if camera_system:
                 camera_system.stop_timeout_monitor()
