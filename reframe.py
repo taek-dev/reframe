@@ -1857,14 +1857,14 @@ def main():
             else:
                 led_ready()
 
-            # make the LED shutting down if its held long enough
-            if time.monotonic() - button_press_start_time >= LONG_PRESS_THRESHOLD:
-                led_shutting_down()
-
             # Button press started
             if current_state and not prev_state:
                 button_press_start_time = time.monotonic()
                 logging.info("Button pressed - monitoring for long press protection...")
+                
+            # make the LED shutting down if its held long enough
+            if time.monotonic() - button_press_start_time >= LONG_PRESS_THRESHOLD:
+                led_shutting_down()
 
             # Button released
             elif not current_state and prev_state:
