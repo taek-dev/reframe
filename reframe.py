@@ -1777,7 +1777,7 @@ def main():
     # Python/Picamera2 imports happen before this point, overlapping the cold
     # boot wait for the camera subdevice. HDR is still applied before the
     # Picamera2 constructor opens the camera.
-    _enable_camera_hdr()
+    #_enable_camera_hdr()
     camera_system = CameraSystem(eink_display=startup_display)
     logging.info("Camera system initialized")
 
